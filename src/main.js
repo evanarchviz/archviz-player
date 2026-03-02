@@ -48,8 +48,7 @@ async function init(){
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // ---------- HDR ENVIRONMENT ----------
-
+    // ---------- HDR ----------
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -58,8 +57,6 @@ async function init(){
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
 
             hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-
-            // Rotate HDR 90°
             hdrTexture.center.set(0.5, 0.5);
             hdrTexture.rotation = Math.PI / 2;
 
@@ -71,7 +68,7 @@ async function init(){
             pmremGenerator.dispose();
         });
 
-    // -------------------------------------
+    // -------------------------
 
     await MeshoptDecoder.ready;
 
@@ -82,23 +79,28 @@ async function init(){
 
         model = gltf.scene;
 
+        // ---- CLEAN GLASS MATERIAL ----
+        const cleanGlass = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            metalness: 0,
+            roughness: 0.02,
+            transmission: 1.0,
+            thickness: 0,               // thin surface
+            ior: 1.45,
+            transparent: true,
+            opacity: 1,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            envMapIntensity: 1.0
+        });
+
         model.traverse((child) => {
+            if (child.isMesh && child.material) {
 
-            if (child.isMesh && child.material && child.material.name === "M_Glass_Darker") {
+                if (child.material.name === "M_Glass_Darker") {
 
-                // Thin-surface glass (correct for raster)
-                child.material = new THREE.MeshPhysicalMaterial({
-                    color: 0xffffff,
-                    metalness: 0,
-                    roughness: 0.02,
-                    transmission: 1.0,
-                    thickness: 0, // KEY FIX
-                    ior: 1.45,
-                    transparent: true,
-                    depthWrite: false,
-                    side: THREE.DoubleSide,
-                    envMapIntensity: 1.0
-                });
+                    child.material = cleanGlass.clone();
+                }
             }
         });
 
