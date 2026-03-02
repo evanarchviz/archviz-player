@@ -6,23 +6,13 @@ import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
 let model;
+
 let velocity = new THREE.Vector3();
-let direction = new THREE.Vector3();
 let move = { forward:false, backward:false, left:false, right:false };
 let clock = new THREE.Clock();
 let canMove = false;
 
-// Blender spawn converted to Three.js
-// Blender:
-// X = -8.7799
-// Y = -12.5123
-// Z = 6.67481
-//
-// Three:
-// X = Blender X
-// Y = Blender Z
-// Z = -Blender Y
-
+// Blender → Three conversion
 const SPAWN = new THREE.Vector3(
     -8.7799,
     6.67481,
@@ -51,7 +41,7 @@ async function init(){
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    // HDRI for glass reflections
+    // Environment for glass
     new RGBELoader()
         .load("https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr", function(texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -64,10 +54,8 @@ async function init(){
     loader.setMeshoptDecoder(MeshoptDecoder);
 
     loader.load("./assets/scene.glb", function(gltf){
-
         model = gltf.scene;
         scene.add(model);
-
         camera.position.copy(SPAWN);
     });
 
@@ -119,30 +107,33 @@ function animate(){
 
         const delta = clock.getDelta();
         const speed = 14;
-        const damping = 6;
+        const damping = 8;
 
-        direction.z = Number(move.forward) - Number(move.backward);
-        direction.x = Number(move.right) - Number(move.left);
-        direction.normalize();
-
+        // Apply damping
         velocity.x -= velocity.x * damping * delta;
         velocity.z -= velocity.z * damping * delta;
 
-        velocity.z -= direction.z * speed * delta;
-        velocity.x -= direction.x * speed * delta;
+        // Build movement direction in LOCAL space
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
 
-        const moveVector = new THREE.Vector3(
-            -velocity.x * delta,
-            0,
-            -velocity.z * delta
-        );
+        const right = new THREE.Vector3();
+        right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-        const player = controls.getObject();
+        if (move.forward) velocity.add(forward.clone().multiplyScalar(speed * delta));
+        if (move.backward) velocity.add(forward.clone().multiplyScalar(-speed * delta));
+        if (move.left) velocity.add(right.clone().multiplyScalar(-speed * delta));
+        if (move.right) velocity.add(right.clone().multiplyScalar(speed * delta));
 
-        // Wall collision raycast
+        const nextPosition = controls.getObject().position.clone().add(velocity);
+
+        // Collision check
+        const moveDir = velocity.clone().normalize();
         const raycaster = new THREE.Raycaster(
-            player.position,
-            moveVector.clone().normalize(),
+            controls.getObject().position,
+            moveDir,
             0,
             0.6
         );
@@ -150,11 +141,11 @@ function animate(){
         const intersects = raycaster.intersectObject(model, true);
 
         if (intersects.length === 0) {
-            player.position.add(moveVector);
+            controls.getObject().position.copy(nextPosition);
         }
 
-        // Lock height to upper floor eye level
-        player.position.y = SPAWN.y;
+        // Lock height
+        controls.getObject().position.y = SPAWN.y;
     }
 
     renderer.render(scene, camera);
