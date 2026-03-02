@@ -44,14 +44,12 @@ async function init(){
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-
-    // IMPORTANT FOR TRANSMISSION
     renderer.physicallyCorrectLights = true;
-
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // HDR setup
+    // ---------- HDR ENVIRONMENT ----------
+
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -61,7 +59,7 @@ async function init(){
 
             hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
 
-            // rotate 90 degrees
+            // Rotate HDR 90°
             hdrTexture.center.set(0.5, 0.5);
             hdrTexture.rotation = Math.PI / 2;
 
@@ -72,6 +70,8 @@ async function init(){
 
             pmremGenerator.dispose();
         });
+
+    // -------------------------------------
 
     await MeshoptDecoder.ready;
 
@@ -86,15 +86,17 @@ async function init(){
 
             if (child.isMesh && child.material && child.material.name === "M_Glass_Darker") {
 
+                // Thin-surface glass (correct for raster)
                 child.material = new THREE.MeshPhysicalMaterial({
                     color: 0xffffff,
                     metalness: 0,
-                    roughness: 0.01,
+                    roughness: 0.02,
                     transmission: 1.0,
-                    thickness: 0.01,
+                    thickness: 0, // KEY FIX
                     ior: 1.45,
                     transparent: true,
                     depthWrite: false,
+                    side: THREE.DoubleSide,
                     envMapIntensity: 1.0
                 });
             }
