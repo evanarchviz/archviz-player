@@ -1,20 +1,18 @@
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
-import { PointerLockControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
-import { MeshoptDecoder } from "https://unpkg.com/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
-import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
 let model;
 let clock = new THREE.Clock();
 let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
-
 let isMobile = false;
 
 let yawObject;
 let pitchObject;
-
 let rotateScreen;
 
 const playerHeight = 1.7;
@@ -60,8 +58,6 @@ async function init(){
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
-    renderer.physicallyCorrectLights = true;
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
@@ -72,15 +68,12 @@ async function init(){
         checkOrientation();
     });
 
-    window.addEventListener("orientationchange", checkOrientation);
-
-    // FPS hierarchy
+    // FPS structure
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
     yawObject.add(pitchObject);
     pitchObject.add(camera);
     scene.add(yawObject);
-
     yawObject.position.copy(SPAWN);
 
     // HDR
@@ -91,13 +84,9 @@ async function init(){
         .setPath("./assets/")
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
             hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-            hdrTexture.center.set(0.5, 0.5);
-            hdrTexture.rotation = Math.PI / 2;
-
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
             scene.environment = envMap;
             scene.background = hdrTexture;
-
             pmremGenerator.dispose();
         });
 
@@ -108,25 +97,6 @@ async function init(){
 
     loader.load("./assets/scene.glb", (gltf) => {
         model = gltf.scene;
-
-        model.traverse((child) => {
-            if (child.isMesh && child.material && child.material.name === "M_Glass_Darker") {
-                child.material = new THREE.MeshPhysicalMaterial({
-                    color: 0xffffff,
-                    metalness: 0,
-                    roughness: 0.02,
-                    transmission: 1.0,
-                    thickness: 0.0,
-                    ior: 1.45,
-                    transparent: true,
-                    opacity: 1.0,
-                    depthWrite: false,
-                    side: THREE.FrontSide,
-                    envMapIntensity: 1.0
-                });
-            }
-        });
-
         scene.add(model);
         playerBaseY = SPAWN.y - playerHeight;
     });
@@ -138,19 +108,8 @@ async function init(){
     } else {
         startScreen.addEventListener("click", async () => {
             startScreen.style.display = "none";
-
-            if (document.documentElement.requestFullscreen) {
-                await document.documentElement.requestFullscreen();
-            }
-
-            if (screen.orientation && screen.orientation.lock) {
-                try {
-                    await screen.orientation.lock("landscape");
-                } catch (e) {}
-            }
-
-            setupMobileControls();
             canMove = true;
+            setupMobileControls();
             checkOrientation();
         });
     }
@@ -198,7 +157,7 @@ function setupMobileControls() {
     let active = false;
     let centerX, centerY;
 
-    joystick.addEventListener("touchstart", (e) => {
+    joystick.addEventListener("touchstart", () => {
         active = true;
         const rect = joystick.getBoundingClientRect();
         centerX = rect.left + rect.width/2;
@@ -207,8 +166,8 @@ function setupMobileControls() {
 
     joystick.addEventListener("touchmove", (e) => {
         if (!active) return;
-        const touch = e.touches[0];
 
+        const touch = e.touches[0];
         const dx = touch.clientX - centerX;
         const dy = touch.clientY - centerY;
 
@@ -255,7 +214,6 @@ function setupMobileControls() {
 
 function animate(){
     requestAnimationFrame(animate);
-    const delta = clock.getDelta();
 
     if (canMove && model){
 
@@ -275,38 +233,10 @@ function animate(){
 
         if (movement.length() > 0){
             movement.normalize();
-            movement.multiplyScalar(speed * delta);
+            movement.multiplyScalar(speed * clock.getDelta());
         }
 
-        const proposed = yawObject.position.clone().add(movement);
-
-        if (movement.length() > 0){
-            const midHeight = playerBaseY + playerHeight * 0.5;
-            const ray = new THREE.Raycaster(
-                new THREE.Vector3(yawObject.position.x, midHeight, yawObject.position.z),
-                movement.clone().normalize(),
-                0,
-                playerRadius
-            );
-
-            const hits = ray.intersectObject(model, true);
-            if (hits.length === 0){
-                yawObject.position.copy(proposed);
-            }
-        }
-
-        const footRay = new THREE.Raycaster(
-            new THREE.Vector3(yawObject.position.x, playerBaseY + stepHeight, yawObject.position.z),
-            new THREE.Vector3(0,-1,0),
-            0,
-            stepHeight + 0.5
-        );
-
-        const groundHits = footRay.intersectObject(model, true);
-        if (groundHits.length > 0){
-            playerBaseY = groundHits[0].point.y;
-        }
-
+        yawObject.position.add(movement);
         yawObject.position.y = playerBaseY + playerHeight;
     }
 
