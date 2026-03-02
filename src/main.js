@@ -11,10 +11,12 @@ let clock = new THREE.Clock();
 let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
 
-const playerHeight = 1.7;
+const playerHeight = 1.7;      // eye height
 const playerRadius = 0.35;
 const speed = 4.5;
-const stepHeight = 0.6;
+const stepHeight = 0.25;       // much smaller
+
+let playerBaseY = 0;
 
 const SPAWN = new THREE.Vector3(
     -8.7799,
@@ -57,8 +59,11 @@ async function init(){
     loader.setMeshoptDecoder(MeshoptDecoder);
 
     loader.load("./assets/scene.glb", gltf => {
+
         model = gltf.scene;
         scene.add(model);
+
+        playerBaseY = SPAWN.y - playerHeight;
         camera.position.copy(SPAWN);
     });
 
@@ -104,7 +109,6 @@ function animate(){
 
         const player = controls.getObject();
 
-        // Camera-relative direction
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -125,13 +129,15 @@ function animate(){
             movement.multiplyScalar(speed * delta);
         }
 
-        const nextPosition = player.position.clone().add(movement);
+        const proposed = player.position.clone().add(movement);
 
-        // Wall collision
+        // Horizontal collision at mid-body
         if (movement.length() > 0){
 
+            const midHeight = playerBaseY + playerHeight * 0.5;
+
             const ray = new THREE.Raycaster(
-                player.position.clone().add(new THREE.Vector3(0, playerHeight * 0.5, 0)),
+                new THREE.Vector3(player.position.x, midHeight, player.position.z),
                 movement.clone().normalize(),
                 0,
                 playerRadius
@@ -140,23 +146,26 @@ function animate(){
             const hits = ray.intersectObject(model, true);
 
             if (hits.length === 0){
-                player.position.copy(nextPosition);
+                player.position.copy(proposed);
             }
         }
 
-        // Ground detection + stairs
-        const downRay = new THREE.Raycaster(
-            player.position.clone().add(new THREE.Vector3(0, stepHeight, 0)),
+        // Ground detection from feet
+        const footRay = new THREE.Raycaster(
+            new THREE.Vector3(player.position.x, playerBaseY + stepHeight, player.position.z),
             new THREE.Vector3(0,-1,0),
             0,
-            playerHeight + stepHeight
+            stepHeight + 0.5
         );
 
-        const groundHits = downRay.intersectObject(model, true);
+        const groundHits = footRay.intersectObject(model, true);
 
         if (groundHits.length > 0){
-            player.position.y = groundHits[0].point.y;
+            playerBaseY = groundHits[0].point.y;
         }
+
+        // Update camera height
+        player.position.y = playerBaseY + playerHeight;
     }
 
     renderer.render(scene, camera);
