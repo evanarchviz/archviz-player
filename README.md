@@ -1,4 +1,4 @@
-# Evan Archviz – Interactive Experience
+# Evan's Archviz – Interactive Experience
 
 © 2026 Evan Archviz. All Rights Reserved.
 
@@ -80,3 +80,4 @@ Evan Archviz
 info@evansarchviz.com
 
 ---
+
