@@ -1,8 +1,8 @@
-import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
-import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
-import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import { RGBELoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
+import { PointerLockControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+import { MeshoptDecoder } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
 
 const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -30,6 +30,7 @@ async function init(){
     const startScreen = document.getElementById("startScreen");
     const controlsText = document.getElementById("controlsText");
 
+    // Overlay text logic
     if (isMobile) {
         controlsText.innerText =
             "Left side = Move • Right side = Look";
@@ -81,6 +82,7 @@ async function init(){
 
         model = gltf.scene;
 
+        // Thin-surface glass fix
         model.traverse((child) => {
             if (child.isMesh && child.material?.name === "M_Glass_Darker") {
                 child.material = new THREE.MeshPhysicalMaterial({
