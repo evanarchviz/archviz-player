@@ -11,10 +11,10 @@ let clock = new THREE.Clock();
 let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
 
-const playerHeight = 1.7;      // eye height
+const playerHeight = 1.7;
 const playerRadius = 0.35;
 const speed = 4.5;
-const stepHeight = 0.25;       // much smaller
+const stepHeight = 0.2;
 
 let playerBaseY = 0;
 
@@ -42,9 +42,12 @@ async function init(){
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
+    // HDRI environment (required for glass)
     new RGBELoader().load(
         "https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr",
         tex => {
@@ -61,6 +64,31 @@ async function init(){
     loader.load("./assets/scene.glb", gltf => {
 
         model = gltf.scene;
+
+        // Override glass material
+        model.traverse(child => {
+
+            if (child.isMesh && child.material) {
+
+                if (child.material.name === "M_Glass_Darker") {
+
+                    child.material = new THREE.MeshPhysicalMaterial({
+                        color: 0xffffff,
+                        metalness: 0,
+                        roughness: 0,
+                        transmission: 1,
+                        thickness: 0.25,
+                        ior: 1.5,
+                        transparent: true,
+                        opacity: 1,
+                        envMapIntensity: 1,
+                        clearcoat: 0.2,
+                        clearcoatRoughness: 0
+                    });
+                }
+            }
+        });
+
         scene.add(model);
 
         playerBaseY = SPAWN.y - playerHeight;
@@ -109,6 +137,7 @@ function animate(){
 
         const player = controls.getObject();
 
+        // Camera-relative direction
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -131,7 +160,7 @@ function animate(){
 
         const proposed = player.position.clone().add(movement);
 
-        // Horizontal collision at mid-body
+        // Horizontal collision (torso height)
         if (movement.length() > 0){
 
             const midHeight = playerBaseY + playerHeight * 0.5;
@@ -150,7 +179,7 @@ function animate(){
             }
         }
 
-        // Ground detection from feet
+        // Ground detection (feet)
         const footRay = new THREE.Raycaster(
             new THREE.Vector3(player.position.x, playerBaseY + stepHeight, player.position.z),
             new THREE.Vector3(0,-1,0),
@@ -164,7 +193,7 @@ function animate(){
             playerBaseY = groundHits[0].point.y;
         }
 
-        // Update camera height
+        // Maintain eye height
         player.position.y = playerBaseY + playerHeight;
     }
 
