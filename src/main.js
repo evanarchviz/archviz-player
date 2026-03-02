@@ -58,17 +58,15 @@ async function init(){
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- FPS hierarchy (used for mobile look) ---
+    // FPS hierarchy
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
-
     yawObject.add(pitchObject);
     pitchObject.add(camera);
     scene.add(yawObject);
-
     yawObject.position.copy(SPAWN);
 
-    // --- HDR ---
+    // HDR
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -93,15 +91,19 @@ async function init(){
         playerBaseY = SPAWN.y - playerHeight;
     });
 
-    // --- Desktop pointer lock ---
     controls = new PointerLockControls(camera, document.body);
 
     if (!isMobile) {
         startScreen.addEventListener("click", () => controls.lock());
     } else {
-        startScreen.addEventListener("click", () => {
+        startScreen.addEventListener("click", async () => {
             startScreen.style.display = "none";
             canMove = true;
+
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+
             setupMobileControls();
         });
     }
@@ -118,7 +120,6 @@ async function init(){
         }
     });
 
-    // --- Keyboard movement ---
     document.addEventListener("keydown", (e) => {
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
@@ -138,6 +139,7 @@ async function init(){
 
 function setupMobileControls() {
 
+    // Left side = movement
     const joystick = document.createElement("div");
     joystick.className = "joystick";
     document.body.appendChild(joystick);
@@ -149,7 +151,8 @@ function setupMobileControls() {
     let active = false;
     let centerX, centerY;
 
-    joystick.addEventListener("touchstart", () => {
+    joystick.addEventListener("touchstart", (e) => {
+        e.stopPropagation();
         active = true;
         const rect = joystick.getBoundingClientRect();
         centerX = rect.left + rect.width/2;
@@ -157,6 +160,7 @@ function setupMobileControls() {
     });
 
     joystick.addEventListener("touchmove", (e) => {
+        e.stopPropagation();
         if (!active) return;
 
         const touch = e.touches[0];
@@ -175,22 +179,27 @@ function setupMobileControls() {
         move.right = dx > 10;
     });
 
-    joystick.addEventListener("touchend", () => {
+    joystick.addEventListener("touchend", (e) => {
+        e.stopPropagation();
         active = false;
         stick.style.transform = "translate(0,0)";
         move.forward = move.backward = move.left = move.right = false;
     });
 
-    // --- Touch look ---
+    // Right side = camera look
     let lastX = 0, lastY = 0;
     let pitch = 0;
 
     document.addEventListener("touchstart", (e) => {
+        if (e.touches[0].clientX < window.innerWidth / 2) return;
+
         lastX = e.touches[0].clientX;
         lastY = e.touches[0].clientY;
     });
 
     document.addEventListener("touchmove", (e) => {
+        if (e.touches[0].clientX < window.innerWidth / 2) return;
+
         const deltaX = e.touches[0].clientX - lastX;
         const deltaY = e.touches[0].clientY - lastY;
 
@@ -212,7 +221,6 @@ function animate(){
 
     if (canMove && model){
 
-        // Direction ALWAYS based on camera orientation
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -235,7 +243,6 @@ function animate(){
 
         const proposed = yawObject.position.clone().add(movement);
 
-        // Horizontal collision
         if (movement.length() > 0){
             const midHeight = playerBaseY + playerHeight * 0.5;
 
@@ -257,7 +264,6 @@ function animate(){
             }
         }
 
-        // Ground snap
         const footRay = new THREE.Raycaster(
             new THREE.Vector3(
                 yawObject.position.x,
