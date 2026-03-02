@@ -6,39 +6,38 @@ import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
 let model;
-
 let clock = new THREE.Clock();
 let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
+
+let isMobile = false;
 
 const playerHeight = 1.7;
 const playerRadius = 0.35;
 const speed = 4.5;
 const stepHeight = 0.2;
-
 let playerBaseY = 0;
 
-const SPAWN = new THREE.Vector3(
-    -8.7799,
-    6.67481,
-    12.5123
-);
+const SPAWN = new THREE.Vector3(-8.7799, 6.67481, 12.5123);
 
 init();
 
+function detectMobile() {
+    return (
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints && navigator.maxTouchPoints > 2)
+    );
+}
+
 async function init(){
+
+    isMobile = detectMobile();
 
     const container = document.getElementById("container");
     const startScreen = document.getElementById("startScreen");
 
     scene = new THREE.Scene();
-
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        5000
-    );
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -48,29 +47,23 @@ async function init(){
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // ---------- HDR ----------
+    // HDR
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
     new RGBELoader()
         .setPath("./assets/")
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
-
             hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-
-            // Rotate HDR 90°
             hdrTexture.center.set(0.5, 0.5);
             hdrTexture.rotation = Math.PI / 2;
 
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
-
             scene.environment = envMap;
             scene.background = hdrTexture;
 
             pmremGenerator.dispose();
         });
-
-    // -------------------------
 
     await MeshoptDecoder.ready;
 
@@ -78,39 +71,42 @@ async function init(){
     loader.setMeshoptDecoder(MeshoptDecoder);
 
     loader.load("./assets/scene.glb", (gltf) => {
-
         model = gltf.scene;
 
         model.traverse((child) => {
-
             if (child.isMesh && child.material && child.material.name === "M_Glass_Darker") {
-
-                // Thin surface glass (real-time correct)
                 child.material = new THREE.MeshPhysicalMaterial({
                     color: 0xffffff,
                     metalness: 0,
                     roughness: 0.02,
                     transmission: 1.0,
-                    thickness: 0.0,         // CRITICAL
+                    thickness: 0.0,
                     ior: 1.45,
                     transparent: true,
                     opacity: 1.0,
-                    depthWrite: false,      // CRITICAL
-                    side: THREE.FrontSide,  // prevent double accumulation
+                    depthWrite: false,
+                    side: THREE.FrontSide,
                     envMapIntensity: 1.0
                 });
             }
         });
 
         scene.add(model);
-
         playerBaseY = SPAWN.y - playerHeight;
         camera.position.copy(SPAWN);
     });
 
     controls = new PointerLockControls(camera, document.body);
 
-    startScreen.addEventListener("click", () => controls.lock());
+    if (!isMobile) {
+        startScreen.addEventListener("click", () => controls.lock());
+    } else {
+        startScreen.addEventListener("click", () => {
+            startScreen.style.display = "none";
+            canMove = true;
+            setupMobileControls();
+        });
+    }
 
     controls.addEventListener("lock", () => {
         startScreen.style.display = "none";
@@ -118,11 +114,11 @@ async function init(){
     });
 
     controls.addEventListener("unlock", () => {
-        startScreen.style.display = "flex";
-        canMove = false;
+        if (!isMobile) {
+            startScreen.style.display = "flex";
+            canMove = false;
+        }
     });
-
-    scene.add(controls.getObject());
 
     document.addEventListener("keydown", (e) => {
         if (e.code === "KeyW") move.forward = true;
@@ -141,15 +137,76 @@ async function init(){
     animate();
 }
 
+function setupMobileControls() {
+
+    const joystick = document.createElement("div");
+    joystick.className = "joystick";
+    document.body.appendChild(joystick);
+
+    const stick = document.createElement("div");
+    stick.className = "stick";
+    joystick.appendChild(stick);
+
+    let active = false;
+    let centerX, centerY;
+
+    joystick.addEventListener("touchstart", (e) => {
+        active = true;
+        const rect = joystick.getBoundingClientRect();
+        centerX = rect.left + rect.width/2;
+        centerY = rect.top + rect.height/2;
+    });
+
+    joystick.addEventListener("touchmove", (e) => {
+        if (!active) return;
+        const touch = e.touches[0];
+
+        const dx = touch.clientX - centerX;
+        const dy = touch.clientY - centerY;
+
+        const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+        const angle = Math.atan2(dy, dx);
+
+        stick.style.transform =
+            `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+
+        move.forward = dy < -10;
+        move.backward = dy > 10;
+        move.left = dx < -10;
+        move.right = dx > 10;
+    });
+
+    joystick.addEventListener("touchend", () => {
+        active = false;
+        stick.style.transform = "translate(0,0)";
+        move.forward = move.backward = move.left = move.right = false;
+    });
+
+    let lastX = 0, lastY = 0;
+
+    document.addEventListener("touchstart", (e) => {
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+    });
+
+    document.addEventListener("touchmove", (e) => {
+        const deltaX = e.touches[0].clientX - lastX;
+        const deltaY = e.touches[0].clientY - lastY;
+
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+
+        camera.rotation.y -= deltaX * 0.002;
+        camera.rotation.x -= deltaY * 0.002;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+    });
+}
+
 function animate(){
-
     requestAnimationFrame(animate);
-
     const delta = clock.getDelta();
 
     if (canMove && model){
-
-        const player = controls.getObject();
 
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
@@ -160,7 +217,6 @@ function animate(){
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
         const movement = new THREE.Vector3();
-
         if (move.forward) movement.add(forward);
         if (move.backward) movement.addScaledVector(forward, -1);
         if (move.left) movement.addScaledVector(right, -1);
@@ -171,40 +227,36 @@ function animate(){
             movement.multiplyScalar(speed * delta);
         }
 
-        const proposed = player.position.clone().add(movement);
+        const proposed = camera.position.clone().add(movement);
 
         if (movement.length() > 0){
-
             const midHeight = playerBaseY + playerHeight * 0.5;
-
             const ray = new THREE.Raycaster(
-                new THREE.Vector3(player.position.x, midHeight, player.position.z),
+                new THREE.Vector3(camera.position.x, midHeight, camera.position.z),
                 movement.clone().normalize(),
                 0,
                 playerRadius
             );
 
             const hits = ray.intersectObject(model, true);
-
             if (hits.length === 0){
-                player.position.copy(proposed);
+                camera.position.copy(proposed);
             }
         }
 
         const footRay = new THREE.Raycaster(
-            new THREE.Vector3(player.position.x, playerBaseY + stepHeight, player.position.z),
+            new THREE.Vector3(camera.position.x, playerBaseY + stepHeight, camera.position.z),
             new THREE.Vector3(0,-1,0),
             0,
             stepHeight + 0.5
         );
 
         const groundHits = footRay.intersectObject(model, true);
-
         if (groundHits.length > 0){
             playerBaseY = groundHits[0].point.y;
         }
 
-        player.position.y = playerBaseY + playerHeight;
+        camera.position.y = playerBaseY + playerHeight;
     }
 
     renderer.render(scene, camera);
