@@ -3,31 +3,20 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-
-import {
-    computeBoundsTree,
-    disposeBoundsTree,
-    acceleratedRaycast
-} from "three-mesh-bvh";
-
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let scene, camera, renderer, controls;
-let worldCollider;
+let model;
 
 let clock = new THREE.Clock();
-let canMove = false;
 let move = { forward:false, backward:false, left:false, right:false };
-
-const playerVelocity = new THREE.Vector3();
-const playerDirection = new THREE.Vector3();
+let canMove = false;
 
 const playerHeight = 1.7;
 const playerRadius = 0.35;
-const speed = 6;
+const speed = 5;
+const stepHeight = 0.4;
+
+const velocity = new THREE.Vector3();
 
 const SPAWN = new THREE.Vector3(
     -8.7799,
@@ -46,7 +35,7 @@ async function init(){
 
     camera = new THREE.PerspectiveCamera(
         75,
-        window.innerWidth / window.innerHeight,
+        window.innerWidth/window.innerHeight,
         0.1,
         5000
     );
@@ -70,29 +59,8 @@ async function init(){
     loader.setMeshoptDecoder(MeshoptDecoder);
 
     loader.load("./assets/scene.glb", gltf => {
-
-        const model = gltf.scene;
+        model = gltf.scene;
         scene.add(model);
-
-        const geometries = [];
-
-        model.updateMatrixWorld(true);
-
-        model.traverse(child => {
-            if (child.isMesh) {
-                const geo = child.geometry.clone();
-                geo.applyMatrix4(child.matrixWorld);
-                geometries.push(geo);
-            }
-        });
-
-        const merged = mergeGeometries(geometries, false);
-        merged.computeBoundsTree();
-
-        worldCollider = new THREE.Mesh(merged);
-        worldCollider.visible = false;
-        scene.add(worldCollider);
-
         camera.position.copy(SPAWN);
     });
 
@@ -134,10 +102,11 @@ function animate(){
 
     const delta = clock.getDelta();
 
-    if (canMove && worldCollider){
+    if (canMove && model){
 
         const player = controls.getObject();
 
+        // Direction vectors
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -146,42 +115,48 @@ function animate(){
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-        playerDirection.set(0,0,0);
+        velocity.set(0,0,0);
 
-        if (move.forward) playerDirection.add(forward);
-        if (move.backward) playerDirection.addScaledVector(forward, -1);
-        if (move.left) playerDirection.addScaledVector(right, -1);
-        if (move.right) playerDirection.add(right);
+        if (move.forward) velocity.add(forward);
+        if (move.backward) velocity.addScaledVector(forward,-1);
+        if (move.left) velocity.addScaledVector(right,-1);
+        if (move.right) velocity.add(right);
 
-        playerDirection.normalize();
-        playerVelocity.copy(playerDirection).multiplyScalar(speed);
+        velocity.normalize();
+        velocity.multiplyScalar(speed * delta);
 
-        player.position.addScaledVector(playerVelocity, delta);
+        const nextPosition = player.position.clone().add(velocity);
 
-        const capsuleStart = player.position.clone();
-        const capsuleEnd = player.position.clone().add(new THREE.Vector3(0, playerHeight, 0));
-        const capsule = new THREE.Line3(capsuleStart, capsuleEnd);
+        // Horizontal collision ray
+        if (velocity.length() > 0.0001){
 
-        worldCollider.geometry.boundsTree.shapecast({
+            const ray = new THREE.Raycaster(
+                player.position.clone().add(new THREE.Vector3(0, playerHeight * 0.5, 0)),
+                velocity.clone().normalize(),
+                0,
+                playerRadius
+            );
 
-            intersectsBounds: box => true,
+            const hits = ray.intersectObject(model, true);
 
-            intersectsTriangle: tri => {
-
-                const triPoint = new THREE.Vector3();
-                const capsulePoint = new THREE.Vector3();
-
-                const dist = tri.closestPointToSegment(capsule, triPoint, capsulePoint);
-
-                if (dist < playerRadius){
-
-                    const depth = playerRadius - dist;
-                    const direction = capsulePoint.sub(triPoint).normalize();
-
-                    player.position.addScaledVector(direction, depth);
-                }
+            if (hits.length === 0){
+                player.position.copy(nextPosition);
             }
-        });
+        }
+
+        // Ground ray for stairs + floor
+        const downRay = new THREE.Raycaster(
+            player.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
+            new THREE.Vector3(0,-1,0),
+            0,
+            playerHeight + stepHeight
+        );
+
+        const groundHits = downRay.intersectObject(model, true);
+
+        if (groundHits.length > 0){
+            player.position.y = groundHits[0].point.y;
+        }
     }
 
     renderer.render(scene, camera);
