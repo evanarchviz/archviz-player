@@ -44,11 +44,14 @@ async function init(){
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
+
+    // IMPORTANT FOR TRANSMISSION
+    renderer.physicallyCorrectLights = true;
+
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // -------- HDR ENVIRONMENT --------
-
+    // HDR setup
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -58,21 +61,17 @@ async function init(){
 
             hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
 
-            // Rotate HDR 90 degrees horizontally
+            // rotate 90 degrees
             hdrTexture.center.set(0.5, 0.5);
             hdrTexture.rotation = Math.PI / 2;
 
-            // Reflections
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
-            scene.environment = envMap;
 
-            // Visible sky
+            scene.environment = envMap;
             scene.background = hdrTexture;
 
             pmremGenerator.dispose();
         });
-
-    // ---------------------------------
 
     await MeshoptDecoder.ready;
 
@@ -83,34 +82,21 @@ async function init(){
 
         model = gltf.scene;
 
-        // Proper glass fix
         model.traverse((child) => {
 
-            if (child.isMesh && child.material) {
+            if (child.isMesh && child.material && child.material.name === "M_Glass_Darker") {
 
-                if (child.material.name === "M_Glass_Darker") {
-
-                    let mat = child.material;
-
-                    // Ensure physical material
-                    if (!(mat instanceof THREE.MeshPhysicalMaterial)) {
-                        const physicalMat = new THREE.MeshPhysicalMaterial().copy(mat);
-                        child.material = physicalMat;
-                        mat = physicalMat;
-                    }
-
-                    mat.transparent = true;
-                    mat.depthWrite = false;
-
-                    mat.transmission = 1.0;
-                    mat.thickness = 0.02;
-                    mat.ior = 1.45;
-                    mat.roughness = 0.02;
-                    mat.metalness = 0;
-                    mat.envMapIntensity = 0.7;
-
-                    mat.needsUpdate = true;
-                }
+                child.material = new THREE.MeshPhysicalMaterial({
+                    color: 0xffffff,
+                    metalness: 0,
+                    roughness: 0.01,
+                    transmission: 1.0,
+                    thickness: 0.01,
+                    ior: 1.45,
+                    transparent: true,
+                    depthWrite: false,
+                    envMapIntensity: 1.0
+                });
             }
         });
 
@@ -185,7 +171,6 @@ function animate(){
 
         const proposed = player.position.clone().add(movement);
 
-        // Horizontal collision
         if (movement.length() > 0){
 
             const midHeight = playerBaseY + playerHeight * 0.5;
@@ -204,7 +189,6 @@ function animate(){
             }
         }
 
-        // Ground detection
         const footRay = new THREE.Raycaster(
             new THREE.Vector3(player.position.x, playerBaseY + stepHeight, player.position.z),
             new THREE.Vector3(0,-1,0),
