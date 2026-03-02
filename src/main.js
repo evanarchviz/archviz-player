@@ -4,15 +4,31 @@ import { PointerLockControls } from "three/addons/controls/PointerLockControls.j
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
-let scene, camera, renderer, controls;
-let model;
+import {
+    computeBoundsTree,
+    disposeBoundsTree,
+    acceleratedRaycast
+} from "three-mesh-bvh";
 
-let velocity = new THREE.Vector3();
-let move = { forward:false, backward:false, left:false, right:false };
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+let scene, camera, renderer, controls;
+let worldCollider;
+
 let clock = new THREE.Clock();
+let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
 
-// Blender → Three conversion
+const playerVelocity = new THREE.Vector3();
+const playerDirection = new THREE.Vector3();
+
+const playerHeight = 1.7;
+const playerRadius = 0.35;
+const gravity = 30;
+const speed = 6;
+
 const SPAWN = new THREE.Vector3(
     -8.7799,
     6.67481,
@@ -28,42 +44,56 @@ async function init(){
 
     scene = new THREE.Scene();
 
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        5000
-    );
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    // Environment for glass
-    new RGBELoader()
-        .load("https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr", function(texture) {
-            texture.mapping = THREE.EquirectangularReflectionMapping;
-            scene.environment = texture;
-        });
+    new RGBELoader().load(
+        "https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr",
+        tex => {
+            tex.mapping = THREE.EquirectangularReflectionMapping;
+            scene.environment = tex;
+        }
+    );
 
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
-    loader.load("./assets/scene.glb", function(gltf){
-        model = gltf.scene;
+    loader.load("./assets/scene.glb", gltf => {
+
+        const model = gltf.scene;
         scene.add(model);
+
+        // Merge geometry into single collider
+        const geometries = [];
+
+        model.traverse(child => {
+            if (child.isMesh) {
+                const geo = child.geometry.clone();
+                geo.applyMatrix4(child.matrixWorld);
+                geometries.push(geo);
+            }
+        });
+
+        const merged = THREE.BufferGeometryUtils.mergeGeometries(geometries, false);
+        merged.computeBoundsTree();
+
+        worldCollider = new THREE.Mesh(merged);
+        worldCollider.material = new THREE.MeshBasicMaterial({ visible:false });
+
+        scene.add(worldCollider);
+
         camera.position.copy(SPAWN);
     });
 
     controls = new PointerLockControls(camera, document.body);
 
-    startScreen.addEventListener("click", () => {
-        controls.lock();
-    });
+    startScreen.addEventListener("click", () => controls.lock());
 
     controls.addEventListener("lock", () => {
         startScreen.style.display = "none";
@@ -77,24 +107,18 @@ async function init(){
 
     scene.add(controls.getObject());
 
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", e => {
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
         if (e.code === "KeyA") move.left = true;
         if (e.code === "KeyD") move.right = true;
     });
 
-    document.addEventListener("keyup", (e) => {
+    document.addEventListener("keyup", e => {
         if (e.code === "KeyW") move.forward = false;
         if (e.code === "KeyS") move.backward = false;
         if (e.code === "KeyA") move.left = false;
         if (e.code === "KeyD") move.right = false;
-    });
-
-    window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
     animate();
@@ -103,17 +127,12 @@ async function init(){
 function animate(){
     requestAnimationFrame(animate);
 
-    if (canMove && model) {
+    const delta = clock.getDelta();
 
-        const delta = clock.getDelta();
-        const speed = 14;
-        const damping = 8;
+    if (canMove && worldCollider){
 
-        // Apply damping
-        velocity.x -= velocity.x * damping * delta;
-        velocity.z -= velocity.z * damping * delta;
+        const player = controls.getObject();
 
-        // Build movement direction in LOCAL space
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -122,30 +141,36 @@ function animate(){
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-        if (move.forward) velocity.add(forward.clone().multiplyScalar(speed * delta));
-        if (move.backward) velocity.add(forward.clone().multiplyScalar(-speed * delta));
-        if (move.left) velocity.add(right.clone().multiplyScalar(-speed * delta));
-        if (move.right) velocity.add(right.clone().multiplyScalar(speed * delta));
+        playerDirection.set(0,0,0);
 
-        const nextPosition = controls.getObject().position.clone().add(velocity);
+        if (move.forward) playerDirection.add(forward);
+        if (move.backward) playerDirection.add(forward.clone().multiplyScalar(-1));
+        if (move.left) playerDirection.add(right.clone().multiplyScalar(-1));
+        if (move.right) playerDirection.add(right);
 
-        // Collision check
-        const moveDir = velocity.clone().normalize();
-        const raycaster = new THREE.Raycaster(
-            controls.getObject().position,
-            moveDir,
-            0,
-            0.6
-        );
+        playerDirection.normalize();
+        playerVelocity.x = playerDirection.x * speed;
+        playerVelocity.z = playerDirection.z * speed;
 
-        const intersects = raycaster.intersectObject(model, true);
+        player.position.addScaledVector(playerVelocity, delta);
 
-        if (intersects.length === 0) {
-            controls.getObject().position.copy(nextPosition);
-        }
+        // Capsule collision resolution
+        const capsuleStart = player.position.clone();
+        const capsuleEnd = player.position.clone().add(new THREE.Vector3(0, playerHeight, 0));
 
-        // Lock height
-        controls.getObject().position.y = SPAWN.y;
+        const capsule = new THREE.Line3(capsuleStart, capsuleEnd);
+
+        worldCollider.geometry.boundsTree.shapecast({
+            intersectsBounds: box => true,
+            intersectsTriangle: tri => {
+                const dist = tri.closestPointToSegment(capsule, new THREE.Vector3(), new THREE.Vector3());
+                if (dist < playerRadius) {
+                    const depth = playerRadius - dist;
+                    const normal = tri.getNormal(new THREE.Vector3());
+                    player.position.addScaledVector(normal, depth);
+                }
+            }
+        });
     }
 
     renderer.render(scene, camera);
