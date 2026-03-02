@@ -47,7 +47,7 @@ async function init(){
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // -------- HDR ENVIRONMENT (LOCAL 2K FILE) --------
+    // -------- SKY + ENVIRONMENT --------
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
@@ -56,17 +56,25 @@ async function init(){
         .setPath("./assets/")
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
 
-            // Reflections (prefiltered)
+            // Reflection map (prefiltered)
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
             scene.environment = envMap;
 
-            // Visible sky (sharp)
-            scene.background = hdrTexture;
+            // Create sky sphere (does NOT follow camera)
+            const skyGeo = new THREE.SphereGeometry(500, 60, 40);
+            skyGeo.scale(-1, 1, 1);
+
+            const skyMat = new THREE.MeshBasicMaterial({
+                map: hdrTexture
+            });
+
+            const sky = new THREE.Mesh(skyGeo, skyMat);
+            scene.add(sky);
 
             pmremGenerator.dispose();
         });
 
-    // --------------------------------------------------
+    // -----------------------------------
 
     await MeshoptDecoder.ready;
 
@@ -77,7 +85,7 @@ async function init(){
 
         model = gltf.scene;
 
-        // Glass material override
+        // Glass override
         model.traverse((child) => {
 
             if (child.isMesh && child.material) {
