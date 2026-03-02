@@ -13,10 +13,8 @@ let canMove = false;
 
 const playerHeight = 1.7;
 const playerRadius = 0.35;
-const speed = 5;
-const stepHeight = 0.4;
-
-const velocity = new THREE.Vector3();
+const speed = 4.5;
+const stepHeight = 0.6;
 
 const SPAWN = new THREE.Vector3(
     -8.7799,
@@ -106,7 +104,7 @@ function animate(){
 
         const player = controls.getObject();
 
-        // Direction vectors
+        // Camera-relative direction
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -115,24 +113,26 @@ function animate(){
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-        velocity.set(0,0,0);
+        const movement = new THREE.Vector3();
 
-        if (move.forward) velocity.add(forward);
-        if (move.backward) velocity.addScaledVector(forward,-1);
-        if (move.left) velocity.addScaledVector(right,-1);
-        if (move.right) velocity.add(right);
+        if (move.forward) movement.add(forward);
+        if (move.backward) movement.addScaledVector(forward,-1);
+        if (move.left) movement.addScaledVector(right,-1);
+        if (move.right) movement.add(right);
 
-        velocity.normalize();
-        velocity.multiplyScalar(speed * delta);
+        if (movement.length() > 0){
+            movement.normalize();
+            movement.multiplyScalar(speed * delta);
+        }
 
-        const nextPosition = player.position.clone().add(velocity);
+        const nextPosition = player.position.clone().add(movement);
 
-        // Horizontal collision ray
-        if (velocity.length() > 0.0001){
+        // Wall collision
+        if (movement.length() > 0){
 
             const ray = new THREE.Raycaster(
                 player.position.clone().add(new THREE.Vector3(0, playerHeight * 0.5, 0)),
-                velocity.clone().normalize(),
+                movement.clone().normalize(),
                 0,
                 playerRadius
             );
@@ -144,9 +144,9 @@ function animate(){
             }
         }
 
-        // Ground ray for stairs + floor
+        // Ground detection + stairs
         const downRay = new THREE.Raycaster(
-            player.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
+            player.position.clone().add(new THREE.Vector3(0, stepHeight, 0)),
             new THREE.Vector3(0,-1,0),
             0,
             playerHeight + stepHeight
