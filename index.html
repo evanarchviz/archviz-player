@@ -5,16 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Evans Archviz Experience</title>
 <link rel="stylesheet" href="styles/style.css">
+<style>
+  #mobileInstructions { display:none; }
+  #rotateOverlay {
+    display:none;
+    position:absolute;
+    inset:0;
+    background:#000;
+    color:white;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    z-index:20;
+    font-size:1.2rem;
+  }
+</style>
 </head>
 <body>
 
 <div id="startScreen">
-  <h1>ENTER EXPERIENCE</h1>
-  <p>WASD to move • Mouse to look • ESC to unlock</p>
+  <div id="desktopInstructions">
+    <h1>ENTER EXPERIENCE</h1>
+    <p>WASD to move</p>
+    <p>Mouse to look</p>
+    <p>ESC to unlock</p>
+  </div>
+
+  <div id="mobileInstructions">
+    <h1>ENTER EXPERIENCE</h1>
+    <p>Left thumb: Move</p>
+    <p>Right side swipe: Look</p>
+    <p>Rotate device to landscape</p>
+  </div>
 </div>
 
-<div id="rotateScreen">
-  <h2>Please rotate your device</h2>
+<div id="rotateOverlay">
+  <div>
+    <h2>Please rotate your device</h2>
+    <p>This experience is landscape only.</p>
+  </div>
 </div>
 
 <div id="container"></div>
@@ -26,6 +55,45 @@
     "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
   }
 }
+</script>
+
+<script>
+function isMobile(){
+  return (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2)
+  );
+}
+
+const mobile = isMobile();
+const mobileUI = document.getElementById("mobileInstructions");
+const desktopUI = document.getElementById("desktopInstructions");
+const rotateOverlay = document.getElementById("rotateOverlay");
+const startScreen = document.getElementById("startScreen");
+
+if(mobile){
+  mobileUI.style.display = "block";
+  desktopUI.style.display = "none";
+} else {
+  mobileUI.style.display = "none";
+  desktopUI.style.display = "block";
+}
+
+function checkOrientation(){
+  if(!mobile) return;
+
+  if(window.innerHeight > window.innerWidth){
+    rotateOverlay.style.display = "flex";
+    startScreen.style.pointerEvents = "none";
+  } else {
+    rotateOverlay.style.display = "none";
+    startScreen.style.pointerEvents = "auto";
+  }
+}
+
+checkOrientation();
+window.addEventListener("resize", checkOrientation);
+window.addEventListener("orientationchange", checkOrientation);
 </script>
 
 <script type="module" src="src/main.js"></script>
