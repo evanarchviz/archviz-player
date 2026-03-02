@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 let scene, camera, renderer, controls;
 let velocity = new THREE.Vector3();
@@ -11,7 +12,7 @@ let canMove = false;
 
 init();
 
-function init(){
+async function init(){
 
     const container = document.getElementById("container");
     const startScreen = document.getElementById("startScreen");
@@ -36,6 +37,8 @@ function init(){
     scene.add(hemi);
 
     const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+
     loader.load("./assets/scene.glb", function(gltf){
         scene.add(gltf.scene);
     });
