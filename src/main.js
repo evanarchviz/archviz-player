@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import {
     computeBoundsTree,
@@ -18,15 +19,14 @@ let scene, camera, renderer, controls;
 let worldCollider;
 
 let clock = new THREE.Clock();
-let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
+let move = { forward:false, backward:false, left:false, right:false };
 
 const playerVelocity = new THREE.Vector3();
 const playerDirection = new THREE.Vector3();
 
 const playerHeight = 1.7;
 const playerRadius = 0.35;
-const gravity = 30;
 const speed = 6;
 
 const SPAWN = new THREE.Vector3(
@@ -44,7 +44,12 @@ async function init(){
 
     scene = new THREE.Scene();
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 5000);
+    camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        5000
+    );
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -69,8 +74,9 @@ async function init(){
         const model = gltf.scene;
         scene.add(model);
 
-        // Merge geometry into single collider
         const geometries = [];
+
+        model.updateMatrixWorld(true);
 
         model.traverse(child => {
             if (child.isMesh) {
@@ -80,12 +86,11 @@ async function init(){
             }
         });
 
-        const merged = THREE.BufferGeometryUtils.mergeGeometries(geometries, false);
+        const merged = mergeGeometries(geometries, false);
         merged.computeBoundsTree();
 
         worldCollider = new THREE.Mesh(merged);
-        worldCollider.material = new THREE.MeshBasicMaterial({ visible:false });
-
+        worldCollider.visible = false;
         scene.add(worldCollider);
 
         camera.position.copy(SPAWN);
@@ -144,30 +149,36 @@ function animate(){
         playerDirection.set(0,0,0);
 
         if (move.forward) playerDirection.add(forward);
-        if (move.backward) playerDirection.add(forward.clone().multiplyScalar(-1));
-        if (move.left) playerDirection.add(right.clone().multiplyScalar(-1));
+        if (move.backward) playerDirection.addScaledVector(forward, -1);
+        if (move.left) playerDirection.addScaledVector(right, -1);
         if (move.right) playerDirection.add(right);
 
         playerDirection.normalize();
-        playerVelocity.x = playerDirection.x * speed;
-        playerVelocity.z = playerDirection.z * speed;
+        playerVelocity.copy(playerDirection).multiplyScalar(speed);
 
         player.position.addScaledVector(playerVelocity, delta);
 
-        // Capsule collision resolution
         const capsuleStart = player.position.clone();
         const capsuleEnd = player.position.clone().add(new THREE.Vector3(0, playerHeight, 0));
-
         const capsule = new THREE.Line3(capsuleStart, capsuleEnd);
 
         worldCollider.geometry.boundsTree.shapecast({
+
             intersectsBounds: box => true,
+
             intersectsTriangle: tri => {
-                const dist = tri.closestPointToSegment(capsule, new THREE.Vector3(), new THREE.Vector3());
-                if (dist < playerRadius) {
+
+                const triPoint = new THREE.Vector3();
+                const capsulePoint = new THREE.Vector3();
+
+                const dist = tri.closestPointToSegment(capsule, triPoint, capsulePoint);
+
+                if (dist < playerRadius){
+
                     const depth = playerRadius - dist;
-                    const normal = tri.getNormal(new THREE.Vector3());
-                    player.position.addScaledVector(normal, depth);
+                    const direction = capsulePoint.sub(triPoint).normalize();
+
+                    player.position.addScaledVector(direction, depth);
                 }
             }
         });
