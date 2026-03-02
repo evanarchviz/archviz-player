@@ -13,7 +13,6 @@ let isMobile = false;
 
 let yawObject;
 let pitchObject;
-let rotateScreen;
 
 const playerHeight = 1.7;
 const playerRadius = 0.35;
@@ -32,28 +31,20 @@ function detectMobile() {
     );
 }
 
-function checkOrientation() {
-    if (!isMobile) return;
-
-    if (window.innerHeight > window.innerWidth) {
-        rotateScreen.style.display = "flex";
-        canMove = false;
-    } else {
-        rotateScreen.style.display = "none";
-        canMove = true;
-    }
-}
-
 async function init(){
 
     isMobile = detectMobile();
 
     const container = document.getElementById("container");
     const startScreen = document.getElementById("startScreen");
-    rotateScreen = document.getElementById("rotateScreen");
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+    camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        5000
+    );
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -65,18 +56,19 @@ async function init(){
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        checkOrientation();
     });
 
-    // FPS structure
+    // --- FPS hierarchy ---
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
+
     yawObject.add(pitchObject);
     pitchObject.add(camera);
     scene.add(yawObject);
+
     yawObject.position.copy(SPAWN);
 
-    // HDR
+    // --- HDR ---
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
 
@@ -101,16 +93,16 @@ async function init(){
         playerBaseY = SPAWN.y - playerHeight;
     });
 
+    // --- Desktop Pointer Lock ---
     controls = new PointerLockControls(camera, document.body);
 
     if (!isMobile) {
         startScreen.addEventListener("click", () => controls.lock());
     } else {
-        startScreen.addEventListener("click", async () => {
+        startScreen.addEventListener("click", () => {
             startScreen.style.display = "none";
             canMove = true;
             setupMobileControls();
-            checkOrientation();
         });
     }
 
@@ -126,6 +118,7 @@ async function init(){
         }
     });
 
+    // --- Keyboard movement ---
     document.addEventListener("keydown", (e) => {
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
@@ -140,7 +133,6 @@ async function init(){
         if (e.code === "KeyD") move.right = false;
     });
 
-    checkOrientation();
     animate();
 }
 
@@ -189,6 +181,7 @@ function setupMobileControls() {
         move.forward = move.backward = move.left = move.right = false;
     });
 
+    // --- Touch look ---
     let lastX = 0, lastY = 0;
     let pitch = 0;
 
@@ -215,10 +208,13 @@ function setupMobileControls() {
 function animate(){
     requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
+
     if (canMove && model){
 
-        const forward = new THREE.Vector3();
-        pitchObject.getWorldDirection(forward);
+        // Forward based ONLY on yaw
+        const forward = new THREE.Vector3(0,0,-1);
+        forward.applyQuaternion(yawObject.quaternion);
         forward.y = 0;
         forward.normalize();
 
@@ -226,6 +222,7 @@ function animate(){
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
         const movement = new THREE.Vector3();
+
         if (move.forward) movement.add(forward);
         if (move.backward) movement.addScaledVector(forward, -1);
         if (move.left) movement.addScaledVector(right, -1);
@@ -233,10 +230,51 @@ function animate(){
 
         if (movement.length() > 0){
             movement.normalize();
-            movement.multiplyScalar(speed * clock.getDelta());
+            movement.multiplyScalar(speed * delta);
         }
 
-        yawObject.position.add(movement);
+        const proposed = yawObject.position.clone().add(movement);
+
+        // Horizontal collision
+        if (movement.length() > 0){
+            const midHeight = playerBaseY + playerHeight * 0.5;
+
+            const ray = new THREE.Raycaster(
+                new THREE.Vector3(
+                    yawObject.position.x,
+                    midHeight,
+                    yawObject.position.z
+                ),
+                movement.clone().normalize(),
+                0,
+                playerRadius
+            );
+
+            const hits = ray.intersectObject(model, true);
+
+            if (hits.length === 0){
+                yawObject.position.copy(proposed);
+            }
+        }
+
+        // Ground snap
+        const footRay = new THREE.Raycaster(
+            new THREE.Vector3(
+                yawObject.position.x,
+                playerBaseY + stepHeight,
+                yawObject.position.z
+            ),
+            new THREE.Vector3(0,-1,0),
+            0,
+            stepHeight + 0.5
+        );
+
+        const groundHits = footRay.intersectObject(model, true);
+
+        if (groundHits.length > 0){
+            playerBaseY = groundHits[0].point.y;
+        }
+
         yawObject.position.y = playerBaseY + playerHeight;
     }
 
