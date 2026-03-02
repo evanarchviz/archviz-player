@@ -1,29 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Evans Archviz Experience</title>
-<link rel="stylesheet" href="styles/style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Archviz Player</title>
+<link rel="stylesheet" href="./styles/style.css">
 </head>
 <body>
 
-<div id="startScreen">
-  <h1>ENTER EXPERIENCE</h1>
-  <p>WASD to move • Mouse to look • ESC to unlock</p>
-</div>
-
 <div id="container"></div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
+<div id="startScreen">
+    <h1>ENTER EXPERIENCE</h1>
+    <p>WASD to move • Mouse to look • ESC to unlock</p>
+</div>
 
-<script type="module" src="src/main.js"></script>
+<div id="rotateScreen">
+    <h2>Please rotate your device</h2>
+</div>
+
+<script type="module" src="./src/main.js"></script>
 
 </body>
 </html>
