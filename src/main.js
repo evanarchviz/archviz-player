@@ -45,12 +45,12 @@ async function init(){
         75,
         window.innerWidth / window.innerHeight,
         0.1,
-        5000
+        800 // reduced far plane for better precision
     );
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
@@ -70,19 +70,13 @@ async function init(){
 
     yawObject.position.copy(SPAWN);
 
-    // --- HDR ---
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
-
-    new RGBELoader()
-        .setPath("./assets/")
-        .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
-            hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-            const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
-            scene.environment = envMap;
-            scene.background = hdrTexture;
-            pmremGenerator.dispose();
-        });
+    // --- HDR background ONLY (no lighting) ---
+    const rgbeLoader = new RGBELoader();
+    rgbeLoader.setPath("./assets/");
+    rgbeLoader.load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
+        hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.background = hdrTexture;
+    });
 
     await MeshoptDecoder.ready;
 
@@ -105,9 +99,7 @@ async function init(){
             canMove = true;
 
             if (document.documentElement.requestFullscreen) {
-                try {
-                    await document.documentElement.requestFullscreen();
-                } catch(e){}
+                try { await document.documentElement.requestFullscreen(); } catch(e){}
             }
 
             setupMobileControls();
@@ -185,7 +177,6 @@ function setupMobileControls() {
     document.addEventListener("touchmove", (e) => {
         for (let touch of e.changedTouches) {
 
-            // Movement
             if (touch.identifier === joystickTouchId) {
 
                 const dx = touch.clientX - centerX;
@@ -203,7 +194,6 @@ function setupMobileControls() {
                 move.right = dx > 10;
             }
 
-            // Look
             if (touch.identifier === lookTouchId) {
 
                 const deltaX = touch.clientX - lastLookX;
