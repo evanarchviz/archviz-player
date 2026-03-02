@@ -1,11 +1,11 @@
 let controls;
 let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
-let move = { forward: false, backward: false, left: false, right: false };
+let move = { forward:false, backward:false, left:false, right:false };
 let clock = new THREE.Clock();
 let canMove = false;
 
-function initPlayer() {
+function initPlayer(){
 
     const { scene, camera } = window.app;
     const startScreen = document.getElementById("startScreen");
@@ -52,7 +52,7 @@ function initPlayer() {
     });
 }
 
-function animate() {
+function animate(){
     requestAnimationFrame(animate);
 
     const { renderer, scene, camera } = window.app;
