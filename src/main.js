@@ -43,30 +43,40 @@ async function init(){
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = 1.0;
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // HDRI environment (required for glass)
-    new RGBELoader().load(
-        "https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr",
-        tex => {
-            tex.mapping = THREE.EquirectangularReflectionMapping;
-            scene.environment = tex;
-        }
-    );
+    // -------- HDR ENVIRONMENT (LOCAL 2K FILE) --------
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    new RGBELoader()
+        .setPath("./assets/")
+        .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
+
+            const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
+
+            scene.environment = envMap;
+
+            hdrTexture.dispose();
+            pmremGenerator.dispose();
+        });
+
+    // --------------------------------------------------
 
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
-    loader.load("./assets/scene.glb", gltf => {
+    loader.load("./assets/scene.glb", (gltf) => {
 
         model = gltf.scene;
 
         // Override glass material
-        model.traverse(child => {
+        model.traverse((child) => {
 
             if (child.isMesh && child.material) {
 
@@ -76,12 +86,12 @@ async function init(){
                         color: 0xffffff,
                         metalness: 0,
                         roughness: 0,
-                        transmission: 1,
+                        transmission: 1.0,
                         thickness: 0.25,
                         ior: 1.5,
                         transparent: true,
                         opacity: 1,
-                        envMapIntensity: 1,
+                        envMapIntensity: 1.0,
                         clearcoat: 0.2,
                         clearcoatRoughness: 0
                     });
@@ -111,14 +121,14 @@ async function init(){
 
     scene.add(controls.getObject());
 
-    document.addEventListener("keydown", e => {
+    document.addEventListener("keydown", (e) => {
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
         if (e.code === "KeyA") move.left = true;
         if (e.code === "KeyD") move.right = true;
     });
 
-    document.addEventListener("keyup", e => {
+    document.addEventListener("keyup", (e) => {
         if (e.code === "KeyW") move.forward = false;
         if (e.code === "KeyS") move.backward = false;
         if (e.code === "KeyA") move.left = false;
@@ -129,6 +139,7 @@ async function init(){
 }
 
 function animate(){
+
     requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
@@ -149,8 +160,8 @@ function animate(){
         const movement = new THREE.Vector3();
 
         if (move.forward) movement.add(forward);
-        if (move.backward) movement.addScaledVector(forward,-1);
-        if (move.left) movement.addScaledVector(right,-1);
+        if (move.backward) movement.addScaledVector(forward, -1);
+        if (move.left) movement.addScaledVector(right, -1);
         if (move.right) movement.add(right);
 
         if (movement.length() > 0){
@@ -193,7 +204,6 @@ function animate(){
             playerBaseY = groundHits[0].point.y;
         }
 
-        // Maintain eye height
         player.position.y = playerBaseY + playerHeight;
     }
 
