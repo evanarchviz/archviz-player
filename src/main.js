@@ -12,6 +12,11 @@ let canMove = false;
 
 let isMobile = false;
 
+let yawObject;
+let pitchObject;
+
+let rotateScreen;
+
 const playerHeight = 1.7;
 const playerRadius = 0.35;
 const speed = 4.5;
@@ -29,12 +34,25 @@ function detectMobile() {
     );
 }
 
+function checkOrientation() {
+    if (!isMobile) return;
+
+    if (window.innerHeight > window.innerWidth) {
+        rotateScreen.style.display = "flex";
+        canMove = false;
+    } else {
+        rotateScreen.style.display = "none";
+        canMove = true;
+    }
+}
+
 async function init(){
 
     isMobile = detectMobile();
 
     const container = document.getElementById("container");
     const startScreen = document.getElementById("startScreen");
+    rotateScreen = document.getElementById("rotateScreen");
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
@@ -46,6 +64,24 @@ async function init(){
     renderer.physicallyCorrectLights = true;
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
+
+    window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        checkOrientation();
+    });
+
+    window.addEventListener("orientationchange", checkOrientation);
+
+    // FPS hierarchy
+    yawObject = new THREE.Object3D();
+    pitchObject = new THREE.Object3D();
+    yawObject.add(pitchObject);
+    pitchObject.add(camera);
+    scene.add(yawObject);
+
+    yawObject.position.copy(SPAWN);
 
     // HDR
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -93,7 +129,6 @@ async function init(){
 
         scene.add(model);
         playerBaseY = SPAWN.y - playerHeight;
-        camera.position.copy(SPAWN);
     });
 
     controls = new PointerLockControls(camera, document.body);
@@ -101,10 +136,22 @@ async function init(){
     if (!isMobile) {
         startScreen.addEventListener("click", () => controls.lock());
     } else {
-        startScreen.addEventListener("click", () => {
+        startScreen.addEventListener("click", async () => {
             startScreen.style.display = "none";
-            canMove = true;
+
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+
+            if (screen.orientation && screen.orientation.lock) {
+                try {
+                    await screen.orientation.lock("landscape");
+                } catch (e) {}
+            }
+
             setupMobileControls();
+            canMove = true;
+            checkOrientation();
         });
     }
 
@@ -134,6 +181,7 @@ async function init(){
         if (e.code === "KeyD") move.right = false;
     });
 
+    checkOrientation();
     animate();
 }
 
@@ -183,6 +231,7 @@ function setupMobileControls() {
     });
 
     let lastX = 0, lastY = 0;
+    let pitch = 0;
 
     document.addEventListener("touchstart", (e) => {
         lastX = e.touches[0].clientX;
@@ -196,9 +245,11 @@ function setupMobileControls() {
         lastX = e.touches[0].clientX;
         lastY = e.touches[0].clientY;
 
-        camera.rotation.y -= deltaX * 0.002;
-        camera.rotation.x -= deltaY * 0.002;
-        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        yawObject.rotation.y -= deltaX * 0.002;
+
+        pitch -= deltaY * 0.002;
+        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+        pitchObject.rotation.x = pitch;
     });
 }
 
@@ -209,7 +260,7 @@ function animate(){
     if (canMove && model){
 
         const forward = new THREE.Vector3();
-        camera.getWorldDirection(forward);
+        pitchObject.getWorldDirection(forward);
         forward.y = 0;
         forward.normalize();
 
@@ -227,12 +278,12 @@ function animate(){
             movement.multiplyScalar(speed * delta);
         }
 
-        const proposed = camera.position.clone().add(movement);
+        const proposed = yawObject.position.clone().add(movement);
 
         if (movement.length() > 0){
             const midHeight = playerBaseY + playerHeight * 0.5;
             const ray = new THREE.Raycaster(
-                new THREE.Vector3(camera.position.x, midHeight, camera.position.z),
+                new THREE.Vector3(yawObject.position.x, midHeight, yawObject.position.z),
                 movement.clone().normalize(),
                 0,
                 playerRadius
@@ -240,12 +291,12 @@ function animate(){
 
             const hits = ray.intersectObject(model, true);
             if (hits.length === 0){
-                camera.position.copy(proposed);
+                yawObject.position.copy(proposed);
             }
         }
 
         const footRay = new THREE.Raycaster(
-            new THREE.Vector3(camera.position.x, playerBaseY + stepHeight, camera.position.z),
+            new THREE.Vector3(yawObject.position.x, playerBaseY + stepHeight, yawObject.position.z),
             new THREE.Vector3(0,-1,0),
             0,
             stepHeight + 0.5
@@ -256,9 +307,8 @@ function animate(){
             playerBaseY = groundHits[0].point.y;
         }
 
-        camera.position.y = playerBaseY + playerHeight;
+        yawObject.position.y = playerBaseY + playerHeight;
     }
 
     renderer.render(scene, camera);
 }
-
