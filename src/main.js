@@ -5,11 +5,29 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
+let model;
 let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
 let move = { forward:false, backward:false, left:false, right:false };
 let clock = new THREE.Clock();
 let canMove = false;
+
+// Blender spawn converted to Three.js
+// Blender:
+// X = -8.7799
+// Y = -12.5123
+// Z = 6.67481
+//
+// Three:
+// X = Blender X
+// Y = Blender Z
+// Z = -Blender Y
+
+const SPAWN = new THREE.Vector3(
+    -8.7799,
+    6.67481,
+    12.5123
+);
 
 init();
 
@@ -33,14 +51,13 @@ async function init(){
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    // HDR environment for glass reflections
+    // HDRI for glass reflections
     new RGBELoader()
         .load("https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr", function(texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             scene.environment = texture;
         });
 
-    // Wait for meshopt decoder
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
@@ -48,14 +65,10 @@ async function init(){
 
     loader.load("./assets/scene.glb", function(gltf){
 
-        const model = gltf.scene;
+        model = gltf.scene;
         scene.add(model);
 
-        // Auto-center spawn
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-
-        camera.position.set(center.x, 1.7, center.z + 5);
+        camera.position.copy(SPAWN);
     });
 
     controls = new PointerLockControls(camera, document.body);
@@ -102,11 +115,11 @@ async function init(){
 function animate(){
     requestAnimationFrame(animate);
 
-    if (canMove) {
-        const delta = clock.getDelta();
+    if (canMove && model) {
 
-        const speed = 14;   // Faster movement
-        const damping = 6;  // Less drag, smoother motion
+        const delta = clock.getDelta();
+        const speed = 14;
+        const damping = 6;
 
         direction.z = Number(move.forward) - Number(move.backward);
         direction.x = Number(move.right) - Number(move.left);
@@ -118,8 +131,30 @@ function animate(){
         velocity.z -= direction.z * speed * delta;
         velocity.x -= direction.x * speed * delta;
 
-        controls.moveRight(-velocity.x * delta);
-        controls.moveForward(-velocity.z * delta);
+        const moveVector = new THREE.Vector3(
+            -velocity.x * delta,
+            0,
+            -velocity.z * delta
+        );
+
+        const player = controls.getObject();
+
+        // Wall collision raycast
+        const raycaster = new THREE.Raycaster(
+            player.position,
+            moveVector.clone().normalize(),
+            0,
+            0.6
+        );
+
+        const intersects = raycaster.intersectObject(model, true);
+
+        if (intersects.length === 0) {
+            player.position.add(moveVector);
+        }
+
+        // Lock height to upper floor eye level
+        player.position.y = SPAWN.y;
     }
 
     renderer.render(scene, camera);
