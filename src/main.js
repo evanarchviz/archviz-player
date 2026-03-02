@@ -7,6 +7,7 @@ import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 let scene, camera, renderer, controls;
 let model;
 let clock = new THREE.Clock();
+
 let move = { forward:false, backward:false, left:false, right:false };
 let canMove = false;
 let isMobile = false;
@@ -94,7 +95,6 @@ async function init(){
         playerBaseY = SPAWN.y - playerHeight;
     });
 
-    // --- Desktop PointerLock ---
     controls = new PointerLockControls(camera, document.body);
 
     if (!isMobile) {
@@ -104,7 +104,6 @@ async function init(){
             startScreen.style.display = "none";
             canMove = true;
 
-            // Attempt fullscreen (Android works, iOS safe fallback)
             if (document.documentElement.requestFullscreen) {
                 try {
                     await document.documentElement.requestFullscreen();
@@ -127,7 +126,6 @@ async function init(){
         }
     });
 
-    // --- Keyboard movement ---
     document.addEventListener("keydown", (e) => {
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
@@ -147,7 +145,6 @@ async function init(){
 
 function setupMobileControls() {
 
-    // --- Left side joystick (movement) ---
     const joystick = document.createElement("div");
     joystick.className = "joystick";
     document.body.appendChild(joystick);
@@ -156,69 +153,87 @@ function setupMobileControls() {
     stick.className = "stick";
     joystick.appendChild(stick);
 
-    let active = false;
-    let centerX, centerY;
+    let joystickTouchId = null;
+    let lookTouchId = null;
 
-    joystick.addEventListener("touchstart", (e) => {
-        e.stopPropagation();
-        active = true;
-        const rect = joystick.getBoundingClientRect();
-        centerX = rect.left + rect.width/2;
-        centerY = rect.top + rect.height/2;
-    });
+    let centerX = 0;
+    let centerY = 0;
 
-    joystick.addEventListener("touchmove", (e) => {
-        e.stopPropagation();
-        if (!active) return;
-
-        const touch = e.touches[0];
-        const dx = touch.clientX - centerX;
-        const dy = touch.clientY - centerY;
-
-        const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
-        const angle = Math.atan2(dy, dx);
-
-        stick.style.transform =
-            `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
-
-        move.forward = dy < -10;
-        move.backward = dy > 10;
-        move.left = dx < -10;
-        move.right = dx > 10;
-    });
-
-    joystick.addEventListener("touchend", (e) => {
-        e.stopPropagation();
-        active = false;
-        stick.style.transform = "translate(0,0)";
-        move.forward = move.backward = move.left = move.right = false;
-    });
-
-    // --- Right side touch = camera look ---
-    let lastX = 0, lastY = 0;
+    let lastLookX = 0;
+    let lastLookY = 0;
     let pitch = 0;
 
     document.addEventListener("touchstart", (e) => {
-        if (e.touches[0].clientX < window.innerWidth / 2) return;
+        for (let touch of e.changedTouches) {
 
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
+            if (touch.clientX < window.innerWidth / 2 && joystickTouchId === null) {
+                joystickTouchId = touch.identifier;
+
+                const rect = joystick.getBoundingClientRect();
+                centerX = rect.left + rect.width / 2;
+                centerY = rect.top + rect.height / 2;
+            }
+
+            else if (touch.clientX >= window.innerWidth / 2 && lookTouchId === null) {
+                lookTouchId = touch.identifier;
+                lastLookX = touch.clientX;
+                lastLookY = touch.clientY;
+            }
+        }
     });
 
     document.addEventListener("touchmove", (e) => {
-        if (e.touches[0].clientX < window.innerWidth / 2) return;
+        for (let touch of e.changedTouches) {
 
-        const deltaX = e.touches[0].clientX - lastX;
-        const deltaY = e.touches[0].clientY - lastY;
+            // Movement
+            if (touch.identifier === joystickTouchId) {
 
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
+                const dx = touch.clientX - centerX;
+                const dy = touch.clientY - centerY;
 
-        yawObject.rotation.y -= deltaX * 0.002;
+                const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+                const angle = Math.atan2(dy, dx);
 
-        pitch -= deltaY * 0.002;
-        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
-        pitchObject.rotation.x = pitch;
+                stick.style.transform =
+                    `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+
+                move.forward = dy < -10;
+                move.backward = dy > 10;
+                move.left = dx < -10;
+                move.right = dx > 10;
+            }
+
+            // Look
+            if (touch.identifier === lookTouchId) {
+
+                const deltaX = touch.clientX - lastLookX;
+                const deltaY = touch.clientY - lastLookY;
+
+                lastLookX = touch.clientX;
+                lastLookY = touch.clientY;
+
+                yawObject.rotation.y -= deltaX * 0.002;
+
+                pitch -= deltaY * 0.002;
+                pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+                pitchObject.rotation.x = pitch;
+            }
+        }
+    });
+
+    document.addEventListener("touchend", (e) => {
+        for (let touch of e.changedTouches) {
+
+            if (touch.identifier === joystickTouchId) {
+                joystickTouchId = null;
+                stick.style.transform = "translate(0,0)";
+                move.forward = move.backward = move.left = move.right = false;
+            }
+
+            if (touch.identifier === lookTouchId) {
+                lookTouchId = null;
+            }
+        }
     });
 }
 
@@ -229,7 +244,6 @@ function animate(){
 
     if (canMove && model){
 
-        // Movement based on camera direction
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -252,7 +266,6 @@ function animate(){
 
         const proposed = yawObject.position.clone().add(movement);
 
-        // Horizontal collision
         if (movement.length() > 0){
             const midHeight = playerBaseY + playerHeight * 0.5;
 
@@ -274,7 +287,6 @@ function animate(){
             }
         }
 
-        // Ground snapping
         const footRay = new THREE.Raycaster(
             new THREE.Vector3(
                 yawObject.position.x,
