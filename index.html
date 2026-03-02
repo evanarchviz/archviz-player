@@ -2,54 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Archviz Experience</title>
-<link rel="icon" href="data:,">
-
-<style>
-html, body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: black;
-    font-family: Arial, sans-serif;
-}
-
-#startScreen {
-    position: fixed;
-    inset: 0;
-    background: black;
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    z-index: 10;
-    cursor: pointer;
-}
-
-.overlay-content h1 {
-    font-size: 48px;
-    margin-bottom: 20px;
-}
-
-.overlay-content p {
-    font-size: 16px;
-    opacity: 0.8;
-}
-</style>
+<title>Evans Archviz Experience</title>
+<link rel="stylesheet" href="styles/style.css">
 </head>
-
 <body>
 
 <div id="startScreen">
-    <div class="overlay-content">
-        <h1>ENTER EXPERIENCE</h1>
-        <p id="controlsText">Loading...</p>
-    </div>
+  <h1>ENTER EXPERIENCE</h1>
+  <p>WASD to move • Mouse to look • ESC to unlock</p>
 </div>
 
-<script type="module" src="./src/main.js"></script>
+<div id="container"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module" src="src/main.js"></script>
 
 </body>
 </html>
