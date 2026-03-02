@@ -36,6 +36,9 @@ async function init(){
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
     scene.add(hemi);
 
+    // IMPORTANT: wait for Meshopt to initialize
+    await MeshoptDecoder.ready;
+
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
