@@ -1,8 +1,8 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
-import { RGBELoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
-import { PointerLockControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
-import { MeshoptDecoder } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
+import { PointerLockControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+import { MeshoptDecoder } from "https://unpkg.com/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
 
 const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -30,14 +30,9 @@ async function init(){
     const startScreen = document.getElementById("startScreen");
     const controlsText = document.getElementById("controlsText");
 
-    // Overlay text logic
-    if (isMobile) {
-        controlsText.innerText =
-            "Left side = Move • Right side = Look";
-    } else {
-        controlsText.innerText =
-            "WASD to move • Mouse to look • ESC to unlock";
-    }
+    controlsText.innerText = isMobile
+        ? "Left side = Move • Right side = Look"
+        : "WASD to move • Mouse to look • ESC to unlock";
 
     scene = new THREE.Scene();
 
@@ -51,7 +46,6 @@ async function init(){
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
@@ -82,7 +76,7 @@ async function init(){
 
         model = gltf.scene;
 
-        // Thin-surface glass fix
+        // Thin glass fix
         model.traverse((child) => {
             if (child.isMesh && child.material?.name === "M_Glass_Darker") {
                 child.material = new THREE.MeshPhysicalMaterial({
