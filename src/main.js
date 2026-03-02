@@ -56,11 +56,13 @@ async function init(){
         .setPath("./assets/")
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
 
+            // Reflections (prefiltered)
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
-
             scene.environment = envMap;
 
-            hdrTexture.dispose();
+            // Visible sky (sharp)
+            scene.background = hdrTexture;
+
             pmremGenerator.dispose();
         });
 
@@ -75,7 +77,7 @@ async function init(){
 
         model = gltf.scene;
 
-        // Override glass material
+        // Glass material override
         model.traverse((child) => {
 
             if (child.isMesh && child.material) {
@@ -85,15 +87,13 @@ async function init(){
                     child.material = new THREE.MeshPhysicalMaterial({
                         color: 0xffffff,
                         metalness: 0,
-                        roughness: 0,
-                        transmission: 1.0,
-                        thickness: 0.25,
-                        ior: 1.5,
+                        roughness: 0.02,
+                        transmission: 0.98,
+                        thickness: 0.05,
+                        ior: 1.45,
                         transparent: true,
                         opacity: 1,
-                        envMapIntensity: 1.0,
-                        clearcoat: 0.2,
-                        clearcoatRoughness: 0
+                        envMapIntensity: 0.8
                     });
                 }
             }
@@ -148,7 +148,7 @@ function animate(){
 
         const player = controls.getObject();
 
-        // Camera-relative direction
+        // Camera-relative movement
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
@@ -171,7 +171,7 @@ function animate(){
 
         const proposed = player.position.clone().add(movement);
 
-        // Horizontal collision (torso height)
+        // Horizontal collision
         if (movement.length() > 0){
 
             const midHeight = playerBaseY + playerHeight * 0.5;
@@ -190,7 +190,7 @@ function animate(){
             }
         }
 
-        // Ground detection (feet)
+        // Ground detection
         const footRay = new THREE.Raycaster(
             new THREE.Vector3(player.position.x, playerBaseY + stepHeight, player.position.z),
             new THREE.Vector3(0,-1,0),
