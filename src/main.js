@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
 let velocity = new THREE.Vector3();
@@ -18,32 +19,43 @@ async function init(){
     const startScreen = document.getElementById("startScreen");
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
 
     camera = new THREE.PerspectiveCamera(
         75,
         window.innerWidth / window.innerHeight,
         0.1,
-        2000
+        5000
     );
-    camera.position.set(0, 1.7, 5);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-    scene.add(hemi);
+    // HDR environment for glass reflections
+    new RGBELoader()
+        .load("https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr", function(texture) {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.environment = texture;
+        });
 
-    // IMPORTANT: wait for Meshopt to initialize
+    // Wait for meshopt decoder
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
     loader.load("./assets/scene.glb", function(gltf){
-        scene.add(gltf.scene);
+
+        const model = gltf.scene;
+        scene.add(model);
+
+        // Auto-center spawn
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+
+        camera.position.set(center.x, 1.7, center.z + 5);
     });
 
     controls = new PointerLockControls(camera, document.body);
@@ -92,14 +104,16 @@ function animate(){
 
     if (canMove) {
         const delta = clock.getDelta();
-        const speed = 6;
+
+        const speed = 14;   // Faster movement
+        const damping = 6;  // Less drag, smoother motion
 
         direction.z = Number(move.forward) - Number(move.backward);
         direction.x = Number(move.right) - Number(move.left);
         direction.normalize();
 
-        velocity.x -= velocity.x * 8 * delta;
-        velocity.z -= velocity.z * 8 * delta;
+        velocity.x -= velocity.x * damping * delta;
+        velocity.z -= velocity.z * damping * delta;
 
         velocity.z -= direction.z * speed * delta;
         velocity.x -= direction.x * speed * delta;
