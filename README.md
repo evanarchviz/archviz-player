@@ -1,6 +1,6 @@
 # Evan's Archviz – Interactive Experience
 
-© 2026 Evan Archviz. All Rights Reserved.
+© 2026 Evan's Archviz. All Rights Reserved.
 
 ---
 
@@ -12,7 +12,7 @@ All files contained in this repository — including but not limited to:
 - Visual output
 - Architectural representations
 
-are the intellectual property of Evan Archviz unless otherwise stated.
+are the intellectual property of Evan's Archviz unless otherwise stated.
 
 ---
 
@@ -76,8 +76,9 @@ Access to the live experience does not grant:
 
 For licensing inquiries:
 
-Evan Archviz  
+Evan's Archviz  
 info@evansarchviz.com
 
 ---
+
 
