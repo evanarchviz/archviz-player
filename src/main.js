@@ -47,7 +47,7 @@ async function init(){
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // -------- SKY + ENVIRONMENT --------
+    // -------- HDR ENVIRONMENT --------
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
@@ -56,25 +56,23 @@ async function init(){
         .setPath("./assets/")
         .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
 
-            // Reflection map (prefiltered)
+            hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+
+            // Rotate HDR 90 degrees horizontally
+            hdrTexture.center.set(0.5, 0.5);
+            hdrTexture.rotation = Math.PI / 2;
+
+            // Reflections
             const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
             scene.environment = envMap;
 
-            // Create sky sphere (does NOT follow camera)
-            const skyGeo = new THREE.SphereGeometry(500, 60, 40);
-            skyGeo.scale(-1, 1, 1);
-
-            const skyMat = new THREE.MeshBasicMaterial({
-                map: hdrTexture
-            });
-
-            const sky = new THREE.Mesh(skyGeo, skyMat);
-            scene.add(sky);
+            // Visible sky
+            scene.background = hdrTexture;
 
             pmremGenerator.dispose();
         });
 
-    // -----------------------------------
+    // ---------------------------------
 
     await MeshoptDecoder.ready;
 
@@ -85,24 +83,33 @@ async function init(){
 
         model = gltf.scene;
 
-        // Glass override
+        // Proper glass fix
         model.traverse((child) => {
 
             if (child.isMesh && child.material) {
 
                 if (child.material.name === "M_Glass_Darker") {
 
-                    child.material = new THREE.MeshPhysicalMaterial({
-                        color: 0xffffff,
-                        metalness: 0,
-                        roughness: 0.02,
-                        transmission: 0.98,
-                        thickness: 0.05,
-                        ior: 1.45,
-                        transparent: true,
-                        opacity: 1,
-                        envMapIntensity: 0.8
-                    });
+                    let mat = child.material;
+
+                    // Ensure physical material
+                    if (!(mat instanceof THREE.MeshPhysicalMaterial)) {
+                        const physicalMat = new THREE.MeshPhysicalMaterial().copy(mat);
+                        child.material = physicalMat;
+                        mat = physicalMat;
+                    }
+
+                    mat.transparent = true;
+                    mat.depthWrite = false;
+
+                    mat.transmission = 1.0;
+                    mat.thickness = 0.02;
+                    mat.ior = 1.45;
+                    mat.roughness = 0.02;
+                    mat.metalness = 0;
+                    mat.envMapIntensity = 0.7;
+
+                    mat.needsUpdate = true;
                 }
             }
         });
@@ -156,7 +163,6 @@ function animate(){
 
         const player = controls.getObject();
 
-        // Camera-relative movement
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         forward.y = 0;
