@@ -58,7 +58,7 @@ async function init(){
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- FPS hierarchy ---
+    // --- FPS hierarchy (used for mobile look) ---
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
 
@@ -93,7 +93,7 @@ async function init(){
         playerBaseY = SPAWN.y - playerHeight;
     });
 
-    // --- Desktop Pointer Lock ---
+    // --- Desktop pointer lock ---
     controls = new PointerLockControls(camera, document.body);
 
     if (!isMobile) {
@@ -212,9 +212,9 @@ function animate(){
 
     if (canMove && model){
 
-        // Forward based ONLY on yaw
-        const forward = new THREE.Vector3(0,0,-1);
-        forward.applyQuaternion(yawObject.quaternion);
+        // Direction ALWAYS based on camera orientation
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
         forward.y = 0;
         forward.normalize();
 
