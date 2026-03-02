@@ -2,7 +2,7 @@ let scene, camera, renderer;
 
 init();
 
-function init() {
+function init(){
 
     const container = document.getElementById("container");
 
