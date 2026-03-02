@@ -1,8 +1,6 @@
-import * as THREE from "https://cdn.skypack.dev/three@0.160.0";
-
-import { GLTFLoader } from "https://cdn.skypack.dev/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
-
-import { PointerLockControls } from "https://cdn.skypack.dev/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
 let scene, camera, renderer, controls;
 let velocity = new THREE.Vector3();
