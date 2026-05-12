@@ -1,8 +1,8 @@
-import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
-import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import { PointerLockControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+import { MeshoptDecoder } from "https://unpkg.com/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
+import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
 
 let scene, camera, renderer, controls;
 let model;
@@ -19,6 +19,7 @@ const playerHeight = 1.7;
 const playerRadius = 0.35;
 const speed = 4.5;
 const stepHeight = 0.2;
+
 let playerBaseY = 0;
 
 const SPAWN = new THREE.Vector3(-8.7799, 6.67481, 12.5123);
@@ -26,18 +27,29 @@ const SPAWN = new THREE.Vector3(-8.7799, 6.67481, 12.5123);
 init();
 
 function detectMobile() {
-    return (
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (navigator.maxTouchPoints && navigator.maxTouchPoints > 2)
-    );
+
+    const ua = navigator.userAgent;
+
+    return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(ua);
 }
 
 async function init(){
 
     isMobile = detectMobile();
 
+    console.log("isMobile:", isMobile);
+
     const container = document.getElementById("container");
     const startScreen = document.getElementById("startScreen");
+    const controlsText = document.getElementById("controlsText");
+
+    if (isMobile) {
+        controlsText.innerText =
+            "Left side = Move • Right side = Look";
+    } else {
+        controlsText.innerText =
+            "WASD to move • Mouse to look • ESC to unlock";
+    }
 
     scene = new THREE.Scene();
 
@@ -45,61 +57,116 @@ async function init(){
         75,
         window.innerWidth / window.innerHeight,
         0.1,
-        800 // reduced far plane for better precision
+        800
     );
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
+
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
     renderer.setSize(window.innerWidth, window.innerHeight);
+
     container.appendChild(renderer.domElement);
 
     window.addEventListener("resize", () => {
+
         camera.aspect = window.innerWidth / window.innerHeight;
+
         camera.updateProjectionMatrix();
+
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- FPS hierarchy ---
+    // FPS hierarchy
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
 
     yawObject.add(pitchObject);
     pitchObject.add(camera);
+
     scene.add(yawObject);
 
     yawObject.position.copy(SPAWN);
 
-    // --- HDR background ONLY (no lighting) ---
+    // HDR
     const rgbeLoader = new RGBELoader();
-    rgbeLoader.setPath("./assets/");
+
+    rgbeLoader.setPath("assets/");
+
     rgbeLoader.load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
+
         hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+
         scene.background = hdrTexture;
     });
 
+    // Meshopt
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
+
     loader.setMeshoptDecoder(MeshoptDecoder);
 
-    loader.load("./assets/scene.glb", (gltf) => {
+    loader.load("assets/scene.glb", (gltf) => {
+
         model = gltf.scene;
+
+        // Glass fix
+        model.traverse((child) => {
+
+            if (
+                child.isMesh &&
+                child.material &&
+                child.material.name === "M_Glass_Darker"
+            ) {
+
+                child.material = new THREE.MeshPhysicalMaterial({
+                    color: 0xffffff,
+                    transmission: 1,
+                    transparent: true,
+                    opacity: 0.08,
+                    roughness: 0,
+                    metalness: 0,
+                    thickness: 0,
+                    ior: 1.45,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                });
+            }
+        });
+
         scene.add(model);
+
         playerBaseY = SPAWN.y - playerHeight;
     });
 
+    // Pointer lock controls
     controls = new PointerLockControls(camera, document.body);
 
     if (!isMobile) {
-        startScreen.addEventListener("click", () => controls.lock());
+
+        startScreen.addEventListener("click", () => {
+
+            controls.lock();
+        });
+
     } else {
+
         startScreen.addEventListener("click", async () => {
+
             startScreen.style.display = "none";
+
             canMove = true;
 
             if (document.documentElement.requestFullscreen) {
-                try { await document.documentElement.requestFullscreen(); } catch(e){}
+
+                try {
+
+                    await document.documentElement.requestFullscreen();
+
+                } catch(e){}
             }
 
             setupMobileControls();
@@ -107,18 +174,27 @@ async function init(){
     }
 
     controls.addEventListener("lock", () => {
-        startScreen.style.display = "none";
-        canMove = true;
+
+        if (!isMobile) {
+
+            startScreen.style.display = "none";
+
+            canMove = true;
+        }
     });
 
     controls.addEventListener("unlock", () => {
+
         if (!isMobile) {
+
             startScreen.style.display = "flex";
+
             canMove = false;
         }
     });
 
     document.addEventListener("keydown", (e) => {
+
         if (e.code === "KeyW") move.forward = true;
         if (e.code === "KeyS") move.backward = true;
         if (e.code === "KeyA") move.left = true;
@@ -126,6 +202,7 @@ async function init(){
     });
 
     document.addEventListener("keyup", (e) => {
+
         if (e.code === "KeyW") move.forward = false;
         if (e.code === "KeyS") move.backward = false;
         if (e.code === "KeyA") move.left = false;
@@ -138,11 +215,15 @@ async function init(){
 function setupMobileControls() {
 
     const joystick = document.createElement("div");
+
     joystick.className = "joystick";
+
     document.body.appendChild(joystick);
 
     const stick = document.createElement("div");
+
     stick.className = "stick";
+
     joystick.appendChild(stick);
 
     let joystickTouchId = null;
@@ -153,21 +234,33 @@ function setupMobileControls() {
 
     let lastLookX = 0;
     let lastLookY = 0;
+
     let pitch = 0;
 
     document.addEventListener("touchstart", (e) => {
+
         for (let touch of e.changedTouches) {
 
-            if (touch.clientX < window.innerWidth / 2 && joystickTouchId === null) {
+            if (
+                touch.clientX < window.innerWidth / 2 &&
+                joystickTouchId === null
+            ) {
+
                 joystickTouchId = touch.identifier;
 
                 const rect = joystick.getBoundingClientRect();
+
                 centerX = rect.left + rect.width / 2;
                 centerY = rect.top + rect.height / 2;
             }
 
-            else if (touch.clientX >= window.innerWidth / 2 && lookTouchId === null) {
+            else if (
+                touch.clientX >= window.innerWidth / 2 &&
+                lookTouchId === null
+            ) {
+
                 lookTouchId = touch.identifier;
+
                 lastLookX = touch.clientX;
                 lastLookY = touch.clientY;
             }
@@ -175,6 +268,7 @@ function setupMobileControls() {
     });
 
     document.addEventListener("touchmove", (e) => {
+
         for (let touch of e.changedTouches) {
 
             if (touch.identifier === joystickTouchId) {
@@ -182,7 +276,11 @@ function setupMobileControls() {
                 const dx = touch.clientX - centerX;
                 const dy = touch.clientY - centerY;
 
-                const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+                const dist = Math.min(
+                    Math.sqrt(dx*dx + dy*dy),
+                    40
+                );
+
                 const angle = Math.atan2(dy, dx);
 
                 stick.style.transform =
@@ -205,22 +303,35 @@ function setupMobileControls() {
                 yawObject.rotation.y -= deltaX * 0.002;
 
                 pitch -= deltaY * 0.002;
-                pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+
+                pitch = Math.max(
+                    -Math.PI/2,
+                    Math.min(Math.PI/2, pitch)
+                );
+
                 pitchObject.rotation.x = pitch;
             }
         }
     });
 
     document.addEventListener("touchend", (e) => {
+
         for (let touch of e.changedTouches) {
 
             if (touch.identifier === joystickTouchId) {
+
                 joystickTouchId = null;
+
                 stick.style.transform = "translate(0,0)";
-                move.forward = move.backward = move.left = move.right = false;
+
+                move.forward = false;
+                move.backward = false;
+                move.left = false;
+                move.right = false;
             }
 
             if (touch.identifier === lookTouchId) {
+
                 lookTouchId = null;
             }
         }
@@ -228,6 +339,7 @@ function setupMobileControls() {
 }
 
 function animate(){
+
     requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
@@ -235,29 +347,48 @@ function animate(){
     if (canMove && model){
 
         const forward = new THREE.Vector3();
+
         camera.getWorldDirection(forward);
+
         forward.y = 0;
+
         forward.normalize();
 
         const right = new THREE.Vector3();
-        right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+        right.crossVectors(
+            forward,
+            new THREE.Vector3(0,1,0)
+        ).normalize();
 
         const movement = new THREE.Vector3();
 
         if (move.forward) movement.add(forward);
-        if (move.backward) movement.addScaledVector(forward, -1);
-        if (move.left) movement.addScaledVector(right, -1);
-        if (move.right) movement.add(right);
+
+        if (move.backward)
+            movement.addScaledVector(forward, -1);
+
+        if (move.left)
+            movement.addScaledVector(right, -1);
+
+        if (move.right)
+            movement.add(right);
 
         if (movement.length() > 0){
+
             movement.normalize();
+
             movement.multiplyScalar(speed * delta);
         }
 
-        const proposed = yawObject.position.clone().add(movement);
+        const proposed = yawObject.position
+            .clone()
+            .add(movement);
 
         if (movement.length() > 0){
-            const midHeight = playerBaseY + playerHeight * 0.5;
+
+            const midHeight =
+                playerBaseY + playerHeight * 0.5;
 
             const ray = new THREE.Raycaster(
                 new THREE.Vector3(
@@ -273,6 +404,7 @@ function animate(){
             const hits = ray.intersectObject(model, true);
 
             if (hits.length === 0){
+
                 yawObject.position.copy(proposed);
             }
         }
@@ -288,13 +420,16 @@ function animate(){
             stepHeight + 0.5
         );
 
-        const groundHits = footRay.intersectObject(model, true);
+        const groundHits =
+            footRay.intersectObject(model, true);
 
         if (groundHits.length > 0){
+
             playerBaseY = groundHits[0].point.y;
         }
 
-        yawObject.position.y = playerBaseY + playerHeight;
+        yawObject.position.y =
+            playerBaseY + playerHeight;
     }
 
     renderer.render(scene, camera);
