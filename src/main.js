@@ -50,12 +50,7 @@ async function init(){
 
     scene = new THREE.Scene();
 
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        800
-    );
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 800);
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -139,16 +134,19 @@ async function init(){
         });
 
         document.addEventListener("pointerlockchange", () => {
+            if (renderer.xr.isPresenting) return;
+
             if (document.pointerLockElement === document.body) {
-                startScreen.style.display = "none";
+                if (startScreen) startScreen.style.display = "none";
                 canMove = true;
-            } else if (!renderer.xr.isPresenting) {
-                startScreen.style.display = "flex";
+            } else {
+                if (startScreen) startScreen.style.display = "flex";
                 canMove = false;
             }
         });
 
         document.addEventListener("mousemove", (e) => {
+            if (renderer.xr.isPresenting) return;
             if (document.pointerLockElement !== document.body) return;
 
             yawObject.rotation.y -= e.movementX * 0.002;
@@ -174,14 +172,28 @@ async function init(){
 
     renderer.xr.addEventListener("sessionstart", () => {
         canMove = true;
+
         if (startScreen) startScreen.style.display = "none";
+
+        document.exitPointerLock?.();
+
         yawObject.rotation.set(0, 0, 0);
         pitchObject.rotation.set(0, 0, 0);
+        pitch = 0;
     });
 
     renderer.xr.addEventListener("sessionend", () => {
         canMove = false;
-        if (startScreen && !isMobile) startScreen.style.display = "flex";
+
+        if (startScreen) {
+            startScreen.style.display = "flex";
+
+            if (controlsText) {
+                controlsText.innerText = isMobile
+                    ? "Left side = Move • Right side = Look"
+                    : "WASD to move • Mouse to look • ESC to unlock";
+            }
+        }
     });
 
     document.addEventListener("keydown", (e) => {
@@ -202,7 +214,6 @@ async function init(){
 }
 
 function setupMobileControls() {
-
     if (document.querySelector(".joystick")) return;
 
     const joystick = document.createElement("div");
@@ -215,16 +226,13 @@ function setupMobileControls() {
 
     let joystickTouchId = null;
     let lookTouchId = null;
-
     let centerX = 0;
     let centerY = 0;
-
     let lastLookX = 0;
     let lastLookY = 0;
 
     document.addEventListener("touchstart", (e) => {
         for (let touch of e.changedTouches) {
-
             if (touch.clientX < window.innerWidth / 2 && joystickTouchId === null) {
                 joystickTouchId = touch.identifier;
 
@@ -245,7 +253,6 @@ function setupMobileControls() {
         e.preventDefault();
 
         for (let touch of e.changedTouches) {
-
             if (touch.identifier === joystickTouchId) {
                 const dx = touch.clientX - centerX;
                 const dy = touch.clientY - centerY;
@@ -280,7 +287,6 @@ function setupMobileControls() {
 
     document.addEventListener("touchend", (e) => {
         for (let touch of e.changedTouches) {
-
             if (touch.identifier === joystickTouchId) {
                 joystickTouchId = null;
                 stick.style.transform = "translate(0,0)";
@@ -344,6 +350,7 @@ function getVRMovementVector(delta) {
         }
 
         const deadzone = 0.15;
+
         if (Math.abs(x) < deadzone) x = 0;
         if (Math.abs(y) < deadzone) y = 0;
 
