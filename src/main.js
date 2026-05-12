@@ -425,7 +425,11 @@ function applyMovement(movement) {
         playerBaseY = groundHits[0].point.y;
     }
 
+    if (renderer.xr.isPresenting) {
+    yawObject.position.y = playerBaseY;
+} else {
     yawObject.position.y = playerBaseY + playerHeight;
+}
 }
 
 function animate(){
