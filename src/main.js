@@ -30,9 +30,7 @@ const stepHeight = 0.2;
 
 let playerBaseY = 0;
 
-const SPAWN = new THREE.Vector3(
-8.7799, 6.67481, 12.5123
-);
+const SPAWN = new THREE.Vector3(8.7799, 6.67481, 12.5123);
 
 init();
 
@@ -236,7 +234,43 @@ async function init(){
                         });
                     }
 
+                    // Black material
+                    if (
+                        mat.name.includes("Black")
+                    ) {
 
+                        return new THREE.MeshBasicMaterial({
+
+                            color: 0x000000
+
+                        });
+                    }
+
+                    return mat;
+                }
+
+                if (
+                    Array.isArray(child.material)
+                ) {
+
+                    child.material =
+                        child.material.map(
+                            replaceMaterial
+                        );
+
+                } else {
+
+                    child.material =
+                        replaceMaterial(
+                            child.material
+                        );
+                }
+
+            });
+
+            scene.add(model);
+        }
+    );
 
     if (!isMobile) {
 
