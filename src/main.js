@@ -236,43 +236,7 @@ async function init(){
                         });
                     }
 
-                    // Black material
-                    if (
-                        mat.name.includes("Black")
-                    ) {
 
-                        return new THREE.MeshBasicMaterial({
-
-                            color: 0x000000
-
-                        });
-                    }
-
-                    return mat;
-                }
-
-                if (
-                    Array.isArray(child.material)
-                ) {
-
-                    child.material =
-                        child.material.map(
-                            replaceMaterial
-                        );
-
-                } else {
-
-                    child.material =
-                        replaceMaterial(
-                            child.material
-                        );
-                }
-
-            });
-
-            scene.add(model);
-        }
-    );
 
     if (!isMobile) {
 
