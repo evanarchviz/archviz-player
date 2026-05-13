@@ -236,7 +236,7 @@ async function init(){
 
                     // Black material
                     if (
-                        mat.name.includes("Black")
+                        mat.name.includes("boredtochangethecode")
                     ) {
 
                         return new THREE.MeshBasicMaterial({
